@@ -1,0 +1,53 @@
+def test_hashing(model, test_loader, loss_param, return_codes=False):
+    model.eval()
+    device = loss_param['device']
+    meters = defaultdict(AverageMeter)
+    total_timer = Timer()
+    timer = Timer()
+    nclass = loss_param['arch_kwargs']['nclass']
+    nbit = loss_param['arch_kwargs']['nbit']
+    total_timer.tick()
+
+    ret_codes = []
+    ret_labels = []
+
+    criterion = RelaHashLoss(**loss_param)
+    Triplet = TripletLoss()
+    pbar = tqdm(test_loader, desc='Test', ascii=True, bar_format='{l_bar}{bar:10}{r_bar}')
+    for i, (data, labels) in enumerate(pbar):
+        timer.tick()
+
+        with torch.no_grad():
+            data, labels = data.to(device), labels.to(device)  # hen trainning MLRS delete this line
+
+            codes, _ = model(data,SGE=True)
+            # codes= model(data)
+
+
+            if return_codes:
+                ret_codes.append(codes)
+                ret_labels.append(labels)
+
+        timer.toc()
+        total_timer.toc()
+
+        # store results
+        meters['loss_total'].update(0, data.size(0))
+
+        meters['time'].update(timer.total)
+
+        pbar.set_postfix({'Eval_loss': meters['loss_total'].avg,
+                          'A(CE)': meters['acc'].avg,
+                          'A(CB)': meters['cbacc'].avg})
+
+    print()
+    meters['total_time'].update(total_timer.total)
+
+    if return_codes:
+        res = {
+            'codes': torch.cat(ret_codes),
+            'labels': torch.cat(ret_labels)
+        }
+        return meters, res
+
+    return meters
